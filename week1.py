@@ -1,10 +1,11 @@
 import re
 from collections import Counter
 import itertools as it
-from typing import Tuple, List, Dict
+from typing import NoReturn, Tuple, List, Dict, Set
 
 
 Patterns = Dict[str, int]
+
 
 def frequent_words(text: str, k: int) -> Patterns:
     """
@@ -12,9 +13,7 @@ def frequent_words(text: str, k: int) -> Patterns:
     {'CCC': 3}
 
     """
-    counter = Counter(
-        ''.join(chunk) for chunk in sliding_window(text, k)
-    )
+    counter = Counter("".join(chunk) for chunk in sliding_window(text, k))
     max_count = max(counter.values())
     res = {k: cnt for k, cnt in counter.items() if cnt == max_count}
     return res
@@ -65,14 +64,50 @@ def reverse_complement(s: str):
     'ACCGGGTTTT'
 
     """
-    assert set(s).issubset(set('ATGC'))
-    d = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
-    return ''.join(d[x] for x in reversed(s))
+    assert set(s).issubset(set("ATCG"))
+    d = dict(zip("ATCG", "TAGC"))
+    return "".join(d[x] for x in reversed(s))
+
+
+def chunks(iterable, n):
+    """Get chunk of length n from iterables
+
+    https://docs.python.org/3/library/itertools.html
+    """
+    args = [iter(iterable)] * n
+    chunks = it.zip_longest(*args, fillvalue=None)
+    for chunk in chunks:
+        if chunk[-1] is None:
+            chunk = chunk[:chunk.index(None)]
+        yield chunk
+
+
+def find_clumps(genome: str, k: int, L: int, t: int) -> List[str]:
+    """Find pattens forming (L, t)-clump
+
+    [TODO] Inefficient algorithm in using sliding_window
+
+    Clump (L, t) means k-mers appeares at least t times
+    in an interval of genome of length L.
+
+    >>> find_clumps("CGGACTCGACAGATGTGAAGAACGACAATGTGAAGACTCGACACGACAGAGTGAAGAGAAGAGGAAACATTGTAA", 5, 50, 4)
+    ['CGACA', 'GAAGA']
+    """
+    intervals = sliding_window(genome, L)
+    res: Set[str] = set()
+
+    for interval in intervals:
+        freqs = frequent_words(interval, k)
+        for w, cnt in freqs.items():
+            if cnt >= t:
+                res.add(w)
+
+    return sorted(res)
 
 
 if __name__ == "__main__":
-    kwd = input().strip()
-    text = input().strip()
-    res = pattern_match(text, kwd)
+    k, L, t = map(int, input().strip().split())
+    genome = input().strip()
+    res = find_clumps(genome, k, L, t)
     print(*res)
 
