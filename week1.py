@@ -1,7 +1,8 @@
+import collections
 import re
 from collections import Counter
 import itertools as it
-from typing import NoReturn, Tuple, List, Dict, Set
+from typing import Iterable, Tuple, List, Dict, Set
 
 
 Patterns = Dict[str, int]
@@ -43,7 +44,7 @@ def pattern_match(text: str, subst: str) -> List[int]:
     return [x.start() for x in m.finditer(text)]
 
 
-def sliding_window(iterable, n=2):
+def sliding_window(iterable: Iterable, n=2) -> Iterable[Tuple]:
     """
     >>> list(sliding_window([1, 2, 3, 4, 5], 3))
     [(1, 2, 3), (2, 3, 4), (3, 4, 5)]
@@ -58,7 +59,7 @@ def sliding_window(iterable, n=2):
     return zip(*iterables)
 
 
-def reverse_complement(s: str):
+def reverse_complement(s: str) -> str:
     """
     >>> reverse_complement("AAAACCCGGT")
     'ACCGGGTTTT'
@@ -69,7 +70,7 @@ def reverse_complement(s: str):
     return "".join(d[x] for x in reversed(s))
 
 
-def chunks(iterable, n):
+def chunks(iterable: Iterable, n: int) -> Iterable[Tuple]:
     """Get chunk of length n from iterables
 
     https://docs.python.org/3/library/itertools.html
@@ -83,12 +84,12 @@ def chunks(iterable, n):
 
 
 def find_clumps(genome: str, k: int, L: int, t: int) -> List[str]:
-    """Find pattens forming (L, t)-clump
+    """Find patterns forming (L, t)-clump
 
-    [TODO] Inefficient algorithm in using sliding_window
+    [TODO] Improve the current computational complexity O(len(genome) * L * k)
 
-    Clump (L, t) means k-mers appeares at least t times
-    in an interval of genome of length L.
+    Clump (L, t) means that k-mers appear at least t times
+    in a length-L window of a genome.
 
     >>> find_clumps("CGGACTCGACAGATGTGAAGAACGACAATGTGAAGACTCGACACGACAGAGTGAAGAGAAGAGGAAACATTGTAA", 5, 50, 4)
     ['CGACA', 'GAAGA']
@@ -105,9 +106,37 @@ def find_clumps(genome: str, k: int, L: int, t: int) -> List[str]:
     return sorted(res)
 
 
+def find_clumps_faster(genome: str, k: int, L: int, t: int) -> List[str]:
+    """Find pattens forming (L, t)-clump
+    Computational complexity: O(L * len(genome))
+
+    Clump (L, t) means that k-mers appear at least t times
+    in a length-L window of a genome.
+
+    >>> find_clumps_faster("CGGACTCGACAGATGTGAAGAACGACAATGTGAAGACTCGACACGACAGAGTGAAGAGAAGAGGAAACATTGTAA", 5, 50, 4)
+    ['CGACA', 'GAAGA']
+    """
+    assert L <= len(genome)
+    interval = genome[:L]
+    kmer_counts = collections.Counter("".join(xs) for xs in sliding_window(interval, k))
+    res = {w for w, cnt in kmer_counts.items() if cnt >= t}
+
+    offset = 0
+    while offset + L <= len(genome):
+        w_out = genome[offset: offset + k]
+        w_in = genome[offset + L - k + 1: offset + L + 1]
+        kmer_counts[w_out] -= 1
+        kmer_counts[w_in] += 1
+        if kmer_counts[w_in] >= t:
+            res.add(w_in)
+        offset += 1
+
+    return sorted(res)
+
+
 if __name__ == "__main__":
-    k, L, t = map(int, input().strip().split())
     genome = input().strip()
-    res = find_clumps(genome, k, L, t)
+    k, L, t = map(int, input().strip().split())
+    res = find_clumps_faster(genome, k, L, t)
     print(*res)
 
