@@ -44,7 +44,6 @@ def pattern_match(text: str, subst: str) -> List[int]:
     return [x.start() for x in m.finditer(text)]
 
 
-
 def find_clumps(genome: str, k: int, L: int, t: int) -> List[str]:
     """Find patterns forming (L, t)-clump
 
@@ -85,8 +84,8 @@ def find_clumps_faster(genome: str, k: int, L: int, t: int) -> List[str]:
 
     offset = 0
     while offset + L <= len(genome):
-        w_out = genome[offset: offset + k]
-        w_in = genome[offset + L - k + 1: offset + L + 1]
+        w_out = genome[offset : offset + k]
+        w_in = genome[offset + L - k + 1 : offset + L + 1]
         kmer_counts[w_out] -= 1
         kmer_counts[w_in] += 1
         if kmer_counts[w_in] >= t:
@@ -101,4 +100,3 @@ if __name__ == "__main__":
     k, L, t = map(int, input().strip().split())
     res = find_clumps_faster(genome, k, L, t)
     print(*res)
-

@@ -22,7 +22,7 @@ def chunks(iterable: Iterable, n: int) -> Iterator[Tuple]:
     chunks = it.zip_longest(*args, fillvalue=None)
     for chunk in chunks:
         if chunk[-1] is None:
-            chunk = chunk[:chunk.index(None)]
+            chunk = chunk[: chunk.index(None)]
         yield chunk
 
 
