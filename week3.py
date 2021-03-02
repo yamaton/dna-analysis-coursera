@@ -145,7 +145,14 @@ def motifs2consensus(motifs: List[str]) -> str:
 
 
 def score(motifs: List[str]) -> int:
-    """Score motifs"""
+    """Score motifs with row-wise calculation"""
+    consensus = motifs2consensus(motifs)
+    score = sum(hamming_distance(consensus, motif) for motif in motifs)
+    return score
+
+
+def score_col(motifs: List[str]) -> int:
+    """Score motifs with column-wise calculation"""
     score = 0
     for col in zip(*motifs):
         counter = collections.Counter(col)
