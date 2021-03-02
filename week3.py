@@ -1,10 +1,8 @@
-import sys
-from typing import Collection, Iterable, Set, List, Tuple
+from typing import Iterable, Set, List, Tuple
 import itertools as it
 import functools
 import operator
 import collections
-import numpy as np
 from utils import hamming_distance, neighbors, sliding_window
 
 
@@ -101,7 +99,6 @@ def motifs2profile(motifs: List[str]) -> List[List[float]]:
     Note that position [0, 1, 2, 3] corresponds to ACGT.
     """
     assert all(len(motif) == len(motifs[0]) for motif in motifs)
-    motifs = np.asarray(motifs)
     res = []
     for col in zip(*motifs):
         counter = collections.Counter(col)
@@ -122,7 +119,6 @@ def motifs2profile_laplace(motifs: List[str]) -> List[List[float]]:
     Note that position [0, 1, 2, 3] corresponds to ACGT.
     """
     assert all(len(motif) == len(motifs[0]) for motif in motifs)
-    motifs = np.asarray(motifs)
     res = []
     for col in zip(*motifs):
         counter = collections.Counter(col)
