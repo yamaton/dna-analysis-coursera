@@ -4,9 +4,12 @@ import sys
 import functools
 import operator
 import random
+import multiprocessing
+import pathos.pools
 from utils import sliding_window
 from week3 import motifs2profile_laplace, most_probable_kmer, score
 
+PROCESSES = multiprocessing.cpu_count()
 
 Profile = List[Tuple[float, float, float, float]]
 Motifs = List[str]
@@ -85,18 +88,17 @@ def randomized_motif_search(dna: Iterable[str], k: int, t: int) -> Motifs:
     >>> randomized_motif_search(dna, 8, 5)
     ['TCTCGGGG', 'CCAAGGTG', 'TACAGGCG', 'TTCAGGTG', 'TCCACGTG']
     """
-    score, motifs = min(_randomized_motif_search_unit(dna, k, t) for _ in range(1000))
+    attempts = 1000
+    with multiprocessing.Pool(PROCESSES) as pool:
+        parallel_result = pool.map(lambda x: _randomized_motif_search_unit(dna, k, t), range(attempts))
+
+    score, motifs = min(parallel_result)
     return score, motifs
 
 
-def gibbs_sampler(
+def _gibbs_sampler_core(
     dna: Iterable[str], k: int, t: int, repeat: int
 ) -> Tuple[int, Motifs]:
-    """
-    >>> dna = ["CGCCCCTCTCGGGGGTGTTCAGTAAACGGCCA", "GGGCGAGGTATGTGTAAGTGCCAAGGTGCCAG", "TAGTACCGAGACCGAAAGAAGTATACAGGCGT", "TAGATCAAGTTTCAGGTGCACGTCGGTGAACC", "AATCCACCAGCTCCACGTGCAATGTTGGCCTA"]
-    >>> gibbs_sampler(dna, 8, 5, 1000)
-    ['TCTCGGGG', 'CCAAGGTG', 'TACAGGCG', 'TTCAGGTG', 'TCCACGTG']
-    """
     n = len(dna[0])
     motifs = []
     for seq in dna:
@@ -115,8 +117,26 @@ def gibbs_sampler(
     return score(best_motifs), best_motifs
 
 
+
+def gibbs_sampler(
+    dna: Iterable[str], k: int, t: int, repeat: int
+) -> Tuple[int, Motifs]:
+    """
+    >>> dna = ["CGCCCCTCTCGGGGGTGTTCAGTAAACGGCCA", "GGGCGAGGTATGTGTAAGTGCCAAGGTGCCAG", "TAGTACCGAGACCGAAAGAAGTATACAGGCGT", "TAGATCAAGTTTCAGGTGCACGTCGGTGAACC", "AATCCACCAGCTCCACGTGCAATGTTGGCCTA"]
+    >>> gibbs_sampler(dna, 8, 5, 100)
+    ['TCTCGGGG', 'CCAAGGTG', 'TACAGGCG', 'TTCAGGTG', 'TCCACGTG']
+    """
+    attempts = 20
+    with pathos.pools.ProcessPool(PROCESSES) as pool:
+        parallel_result = pool.map(lambda x: _gibbs_sampler_core(dna, k, t, repeat), range(attempts))
+    score, motifs = min(parallel_result)
+    return score, motifs
+
+
 if __name__ == "__main__":
-    k, t = map(int, input().split())
+    k, t, repeat = map(int, input().split())
     dna = [input().strip() for _ in range(t)]
-    res = randomized_motif_search(dna, k, t)
-    print(*res)
+    x, motifs = gibbs_sampler(dna, k, t, repeat)
+    print(x)
+    for motif in motifs:
+        print(motif)
