@@ -5,7 +5,7 @@ from typing import Generator, Iterable
 def windowed(seq: Iterable, n: int, step=1) -> Generator:
     """Returns sliding window as generator
 
-    [NOTE] Borrowed the implementation from more-itertools
+    [NOTE] Borrowed from more-itertools
 
     >>> list(windowed([1,2,3,4], 3))
     [(1, 2, 3), (2, 3, 4)]
