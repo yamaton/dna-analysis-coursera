@@ -25,4 +25,3 @@ if __name__ == "__main__":
     intervals = ["".join(cs) for cs in windowed(seq, k)]
     for s in intervals:
         print(s)
-
