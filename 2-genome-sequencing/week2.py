@@ -58,7 +58,8 @@ def _get_path(
 
 
 def eulerian_path(g: AdjacencySet) -> List[Hashable]:
-    """
+    """Pick a Eulerian path from graph `g`.
+
     >>> g = {0: [2], 1: [3], 2: [1], 3: [0, 4], 6: [3, 7], 7: [8], 8: [9], 9: [6]}
     >>> eulerian_path(g)
     [6, 7, 8, 9, 6, 3, 0, 2, 1, 3, 4]
@@ -102,10 +103,86 @@ def string_reconstruction(patterns: Iterable[str], k: int) -> str:
     >>> string_reconstruction(patterns, 4)
     'GGCTTACCA'
     """
+    assert len(patterns[0]) == k
     db = to_debruijn_from_kmers(patterns)
     path = eulerian_path(db)
     text = genome_path(path)
     return text
+
+
+def k_universal_circular_string(k: int) -> str:
+    """
+    >>> k_universal_circular_string(4)
+    '0000110010111101'
+    """
+    patterns = ["".join(cs) for cs in it.product("01", repeat=k)]
+    res = string_reconstruction(patterns, k)
+    # It's a matter of choice weather to include the origin/goal in a cycle representation
+    return res[: -(k - 1)]
+
+
+def to_kdmers(s: str, k: int, d: int) -> List[str]:
+    """
+    >>> to_kdmers("TAATGCCATGGGATGTT", 3, 2)
+    ['AAT|CAT', 'ATG|ATG', 'ATG|ATG', 'CAT|GAT', 'CCA|GGA', 'GCC|GGG', 'GGG|GTT', 'TAA|CCA', 'TGC|TGG', 'TGG|TGT']
+    """
+    intervals1 = map(lambda cs: "".join(cs), windowed(s[: -(k + d)], k))
+    intervals2 = map(lambda cs: "".join(cs), windowed(s[k + d :], k))
+    return sorted(["|".join(pair) for pair in zip(intervals1, intervals2)])
+
+
+# def string_reconstruction_from_paired_reads(
+#     reads: Iterable[str], k: int, d: int
+# ) -> str:
+#     """
+#     >>> reads = ["GAGA|TTGA", "TCGT|GATG", "CGTG|ATGT", "TGGT|TGAG", "GTGA|TGTT", "GTGG|GTGA", "TGAG|GTTG", "GGTC|GAGA", "GTCG|AGAT"]
+#     >>> string_reconstruction_from_paired_reads(reads, 4, 2)
+#     'GGCTTACCA'
+#     """
+#     assert len(reads[0]) == 2 * k + 1
+#     db = to_paired_debruijn(reads)
+#     paths = all_eulerian_paths(db)
+#     for path in paths:
+#         text = paired_genome_path(path)
+#         if text is not None:
+#             return text
+
+#     raise ValueError("Something wrong?")
+
+
+def to_paired_debruijn(patterns: Iterable[str]) -> AdjacencyList:
+    d = collections.defaultdict(list)
+    for pair in patterns:
+        read1, read2 = pair.split("|")
+        key = f"{read1[:-1]}|{read2[:-1]}"
+        value = f"{read1[1:]}|{read2[1:]}"
+        d[key].append(value)
+    return {k: sorted(d[k]) for k in sorted(d.keys())}
+
+
+def paired_genome_path(shards: List[str], d: int) -> Optional[str]:
+    """Just merge sliding-window sequences from paired reads
+
+    >>> paired_genome_path(["GACC|GCGC", "ACCG|CGCC",  "CCGA|GCCG",  "CGAG|CCGG", "GAGC|CGGA"], 2)
+    'GACCGAGCGCCGGA'
+    """
+    k = (len(shards[0]) - 1) // 2
+    reads1, reads2 = zip(*[pair.split("|") for pair in shards])
+    gen = iter(reads1)
+    res = [next(gen)]
+    for s in gen:
+        res.append(s[-1])
+    s1 = "".join(res)
+
+    gen = iter(reads2)
+    res = [next(gen)]
+    for s in gen:
+        res.append(s[-1])
+    s2 = "".join(res)
+
+    if s1[k + d :] != s2[: -(k + d)]:
+        return None
+    return s1[: k + d] + s2
 
 
 if __name__ == "__main__":
@@ -116,8 +193,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with open(args.input, "r") as f:
-        k = int(f.readline())
-        patterns = [line.strip() for line in f.readlines()]
+        k, d = map(int, f.readline().split())
+        shards = [line.strip() for line in f.readlines()]
 
-    res = string_reconstruction(patterns, k)
+    assert len(shards[0]) == 2 * k + 1
+    res = paired_genome_path(shards, d)
     print(res)
