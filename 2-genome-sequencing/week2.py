@@ -1,6 +1,7 @@
 import collections
 import functools
 import operator
+import random
 import itertools as it
 from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple
 from week1 import genome_path, to_debruijn_from_kmers
@@ -8,10 +9,10 @@ from utils import windowed
 
 AdjacencySet = Dict[Hashable, Set[Hashable]]
 AdjacencyList = Dict[Hashable, List[Hashable]]
-Trajectory = List[Hashable]
+Path = List[Hashable]
 
 
-def eulerian_cycle(g: AdjacencyList) -> Trajectory:
+def eulerian_cycle(g: AdjacencyList) -> Path:
     """
     >>> g = {0: [3], 1: [0], 2: [1, 6], 3: [2], 4: [2], 5: [4], 6: [5, 8], 7: [9], 8: [7], 9: [6]}
     >>> res = eulerian_cycle(g)
@@ -45,10 +46,10 @@ def eulerian_cycle(g: AdjacencyList) -> Trajectory:
 
 def _get_path(
     g: AdjacencySet,
-    traj: Trajectory,
+    traj: Path,
     n: int,
     start: Hashable,
-) -> Tuple[AdjacencySet, Trajectory, int]:
+) -> Tuple[AdjacencySet, Path, int]:
     x = start
     while (x in g) and g[x]:
         x = g[x].pop()
@@ -64,11 +65,14 @@ def eulerian_path(g: AdjacencySet) -> List[Hashable]:
     >>> eulerian_path(g)
     [6, 7, 8, 9, 6, 3, 0, 2, 1, 3, 4]
     """
-    nodes = set(g.keys()) | functools.reduce(operator.or_, map(set, g.values()))
+    nodes = set(g.keys()) | functools.reduce(
+        lambda a, b: a | b, map(set, g.values()), set()
+    )
     out_degree = {node: len(g.get(node, frozenset())) for node in nodes}
     in_degree = collections.Counter(x for xs in g.values() for x in xs)
 
     candidates = [node for node in nodes if in_degree[node] != out_degree[node]]
+    random.shuffle(candidates)
 
     # process as eulerian cycle if the graph is all balanced
     if not candidates:
@@ -131,23 +135,20 @@ def to_kdmers(s: str, k: int, d: int) -> List[str]:
     return sorted(["|".join(pair) for pair in zip(intervals1, intervals2)])
 
 
-# def string_reconstruction_from_paired_reads(
-#     reads: Iterable[str], k: int, d: int
-# ) -> str:
-#     """
-#     >>> reads = ["GAGA|TTGA", "TCGT|GATG", "CGTG|ATGT", "TGGT|TGAG", "GTGA|TGTT", "GTGG|GTGA", "TGAG|GTTG", "GGTC|GAGA", "GTCG|AGAT"]
-#     >>> string_reconstruction_from_paired_reads(reads, 4, 2)
-#     'GGCTTACCA'
-#     """
-#     assert len(reads[0]) == 2 * k + 1
-#     db = to_paired_debruijn(reads)
-#     paths = all_eulerian_paths(db)
-#     for path in paths:
-#         text = paired_genome_path(path)
-#         if text is not None:
-#             return text
-
-#     raise ValueError("Something wrong?")
+def string_reconstruction_from_paired_reads(
+    reads: Iterable[str], k: int, d: int
+) -> str:
+    """
+    >>> reads = ["GAGA|TTGA", "TCGT|GATG", "CGTG|ATGT", "TGGT|TGAG", "GTGA|TGTT", "GTGG|GTGA", "TGAG|GTTG", "GGTC|GAGA", "GTCG|AGAT"]
+    >>> string_reconstruction_from_paired_reads(reads, 4, 2)
+    'GGCTTACCA'
+    """
+    assert len(reads[0]) == 2 * k + 1
+    reads = list(reads)
+    db = to_paired_debruijn(reads)
+    path = eulerian_path(db)
+    text = paired_genome_path(path, d)
+    return text
 
 
 def to_paired_debruijn(patterns: Iterable[str]) -> AdjacencyList:
@@ -157,11 +158,17 @@ def to_paired_debruijn(patterns: Iterable[str]) -> AdjacencyList:
         key = f"{read1[:-1]}|{read2[:-1]}"
         value = f"{read1[1:]}|{read2[1:]}"
         d[key].append(value)
-    return {k: sorted(d[k]) for k in sorted(d.keys())}
+
+    res = collections.defaultdict(list)
+    for k, xs in d.items():
+        random.shuffle(xs)
+        res[k] += xs
+    return res
 
 
 def paired_genome_path(shards: List[str], d: int) -> Optional[str]:
     """Just merge sliding-window sequences from paired reads
+    aka string_spelled_by_gapped_patterns
 
     >>> paired_genome_path(["GACC|GCGC", "ACCG|CGCC",  "CCGA|GCCG",  "CGAG|CCGG", "GAGC|CGGA"], 2)
     'GACCGAGCGCCGGA'
@@ -185,6 +192,72 @@ def paired_genome_path(shards: List[str], d: int) -> Optional[str]:
     return s1[: k + d] + s2
 
 
+def maximal_nonbranching_paths(g: AdjacencyList) -> List[Path]:
+    """
+    >>> g = {1: [2], 2: [3], 3: [4, 5], 6: [7], 7: [6]}
+    >>> maximal_nonbranching_paths(g)
+    [[1, 2, 3], [3, 4], [3, 5], [6, 7, 6]]
+    """
+    paths = []
+    nodes = {n for ns in g.values() for n in ns} | set(g.keys())
+    out = collections.defaultdict(int, {k: len(v) for k, v in g.items()})
+    in_ = collections.Counter(to_ for from_ in g for to_ in g[from_])
+    one_in_one_out = {n for n in nodes if out[n] == 1 and in_[n] == 1}
+    for v in nodes:
+        if v not in one_in_one_out and out[v] > 0:
+            for w in g[v]:
+                nonbranching_path = [v, w]
+                w_copy = w
+                while w in one_in_one_out:
+                    u = next(iter(g[w]))
+                    nonbranching_path.append(u)
+                    w = u
+                paths.append(nonbranching_path)
+
+    # remove nonbranching paths found so far
+    for p in paths:
+        for a, b in zip(p, p[1:]):
+            g[a].remove(b)
+
+    # find isolated cycles
+    g = collections.defaultdict(list, g)
+    cycles = []
+    for v in nodes:
+        cycle = []
+        while v in one_in_one_out:
+            if v in cycle:
+                cycle.append(v)
+                cycles.append(cycle)
+                break
+            cycle.append(v)
+            if not g[v]:
+                break
+            v = next(iter(g[v]))
+
+    # remove duplicates in cycles
+    seen = set()
+    for cycle in cycles:
+        id_ = frozenset(cycle)
+        if id_ in seen:
+            continue
+        seen.add(id_)
+        paths.append(cycle)
+
+    return sorted(paths)
+
+
+def reads_to_contigs(kmers: Iterable[str]) -> Set[str]:
+    """
+    >>> kmers = ["ATG", "ATG", "TGT", "TGG", "CAT", "GGA", "GAT", "AGA"]
+    >>> reads_to_contigs(kmers)
+    ['AGA', 'ATG', 'ATG', 'CAT', 'GAT', 'TGGA', 'TGT']
+    """
+    db = to_debruijn_from_kmers(kmers)
+    paths = maximal_nonbranching_paths(db)
+    paths = [genome_path(path) for path in paths]
+    return paths
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -193,9 +266,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with open(args.input, "r") as f:
-        k, d = map(int, f.readline().split())
-        shards = [line.strip() for line in f.readlines()]
-
-    assert len(shards[0]) == 2 * k + 1
-    res = paired_genome_path(shards, d)
+        k, d = map(int, f.readline().strip().split())
+        reads = [line.strip() for line in f.readlines()]
+    res = string_reconstruction_from_paired_reads(reads, k, d)
     print(res)
