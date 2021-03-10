@@ -2,7 +2,9 @@ import collections
 import functools
 import operator
 import itertools as it
-from typing import Dict, Generator, List
+import numpy as np
+import matplotlib.pyplot as plt
+from typing import Dict, Generator, Iterable, List, Set
 from utils import chunked, reverse_complement, windowed
 
 MassSpectrum = List[int]
@@ -136,6 +138,10 @@ AA_MASS = {
     "Y": 163,
     "W": 186,
 }
+
+AA_MASS_REDUCED = AA_MASS.copy()
+del AA_MASS_REDUCED["L"]  # I/L
+del AA_MASS_REDUCED["Q"]  # K/Q
 
 
 def transcribe(dna: str) -> str:
@@ -273,16 +279,99 @@ def cyclic_spectrum(peptide: Peptide) -> MassSpectrum:
 
     return sorted(res)
 
+
 theoretical_spectrum = cyclic_spectrum
 
 
-
-def bf_cyclopeptide_sequencing(spectrum: MassSpectrum) -> Peptide:
+def count_peptides_with_given_mass(mass: int) -> int:
     """
-
+    >>> count_peptides_with_given_mass(1024)
+    14712706211
     """
-    for
+    # Use DP array of length (mass + 1)
+    dp = _count_peptides_dp(mass)
+    return dp[mass]
 
+
+def count_peptides_vs_mass(max_mass=1600):
+    """Find C when you asssume the relation y = k C^m
+    where y is the number of peptides, m is the mass, and C and k
+    are parameters determined from the least-square fitting.
+    """
+    min_mass = 500
+    dp = _count_peptides_dp(max_mass)
+    xs = np.arange(min_mass, max_mass + 1).astype(float)
+    ys = np.array([dp[x] for x in xs], dtype=float)
+    log_ys = np.log(ys)
+    A = np.stack([xs, np.ones_like(xs)], axis=1)
+    log_C, log_k = np.linalg.lstsq(A, log_ys, rcond=None)[0]
+    plt.plot(xs, log_ys)
+    line = xs * log_C + log_k
+    plt.plot(xs, line, "r--")
+    plt.show()
+    return np.exp(log_C)
+
+
+def _count_peptides_dp(mass: int) -> List[int]:
+    dp = collections.defaultdict(int)
+    dp[0] = 1
+    steps = list(AA_MASS_REDUCED.values())
+    for i in range(1, mass + 1):
+        dp[i] = sum(dp[i - step] for step in steps)
+    return dp
+
+
+def cyclopeptide_sequencing(spectrum: MassSpectrum) -> Set[Peptide]:
+    """cyclopeptide sequencing
+
+    >>> computed = cyclopeptide_sequencing([0, 113, 128, 186, 241, 299, 314, 427])
+    >>> expected = {'WKI', 'WIK', 'KWI', 'KIW', 'IWK', 'IKW'}
+    >>> computed == expected
+    True
+    """
+    candidates: Set[Peptide] = {""}
+    to_be_removed = set()
+    final_peptides: Set[Peptide] = set()
+    aas = None
+
+    while candidates:
+        if len(next(iter(candidates))) == 1:
+            aas = candidates.copy()
+        candidates = _expand(candidates, aas)
+        for peptide in candidates:
+            if _mass(peptide) == _parent_mass(spectrum):
+                if cyclic_spectrum(peptide) == spectrum:
+                    final_peptides.add(peptide)
+                to_be_removed.add(peptide)
+            elif not _is_consistent(peptide, spectrum):
+                to_be_removed.add(peptide)
+
+        candidates -= to_be_removed
+        to_be_removed.clear()
+    return final_peptides
+
+
+def _expand(candidates: Set[Peptide], aas: Iterable[str]) -> Set[Peptide]:
+    aas = AA_MASS_REDUCED.keys() if aas is None else aas
+    res = {candidate + nuc for candidate in candidates for nuc in aas}
+    return res
+
+
+def _is_consistent(peptide: Peptide, spectrum: MassSpectrum) -> bool:
+    return frozenset(linear_spectrum(peptide)) <= frozenset(spectrum)
+
+
+def _parent_mass(spectrum: MassSpectrum) -> int:
+    return max(spectrum)
+
+
+def _mass(peptide: Peptide) -> int:
+    return sum(AA_MASS[aa] for aa in peptide)
+
+
+def format_peptide_as_masses(peptide: Peptide) -> str:
+    masses = [AA_MASS_REDUCED[nuc] for nuc in peptide]
+    return "-".join(str(m) for m in masses)
 
 
 if __name__ == "__main__":
@@ -292,6 +381,8 @@ if __name__ == "__main__":
     # args = parser.parse_args()
     # with open(args.input, "r") as f:
     #     s = "".join(line.strip() for line in f.readlines())
-    s = input().strip()
-    res = cyclic_spectrum(s)
+
+    spectrum = [int(s) for s in input().strip().split()]
+    peptides = cyclopeptide_sequencing(spectrum)
+    res = [format_peptide_as_masses(p) for p in peptides]
     print(*res)
