@@ -5,12 +5,22 @@ Comparing genomes (UCSD Bioinformatics III)
 """
 
 import collections
-from typing import Hashable, Iterable, List, Tuple
+import itertools as it
+from typing import Dict, Hashable, Iterable, List, Set, Tuple
+import sys
+from utils import toposort
+
+sys.setrecursionlimit(100000)
 
 Path = List[Hashable]
+Grid = List[List[int]]
+StrGrid = List[List[str]]
+AdjList = Dict[Hashable, List[Hashable]]
+EdgeWeight = Dict[Tuple[Hashable, Hashable], int]
+
 
 def dp_change(money: int, coins: Iterable[int]) -> int:
-    """
+    """Return the minimum number of coins whose total is money
 
     >>> dp_change(40, [50, 25, 20, 10, 5, 1])
     2
@@ -23,16 +33,15 @@ def dp_change(money: int, coins: Iterable[int]) -> int:
     return dp[money]
 
 
-
 def dp_change_with_backtracking(money: int, coins: Iterable[int]) -> Tuple[int, Path]:
-    """Coin change problem with back tracking
+    """Return the minimum number of coins whose total is money and its composition
 
-    >>> dp_change_more(40, [50, 25, 20, 10, 5, 1])
+    >>> dp_change_with_backtracking(40, [50, 25, 20, 10, 5, 1])
     (2, [20, 20])
     """
     maxval = 100000000
     dp = collections.defaultdict(lambda: (maxval, None))
-    dp[0] = (0, 0)   # (count, predecessor)
+    dp[0] = (0, 0)  # (count, predecessor)
     for x in range(1, money + 1):
         count, pred = min((dp[x - coin][0], x - coin) for coin in coins)
         dp[x] = (1 + count, pred)
@@ -40,19 +49,166 @@ def dp_change_with_backtracking(money: int, coins: Iterable[int]) -> Tuple[int, 
     path = []
     x = money
     while x > 0:
-        path.append(x)
-        _, x = dp[x]
+        _, x_prev = dp[x]
+        path.append(x - x_prev)
+        x = x_prev
 
     return dp[money][0], list(path)
 
 
+def manhattan_tourist(down: Grid, right: Grid, n: int, m: int) -> int:
+    """
+    >>> down = [[1, 0, 2, 4, 3], [4, 6, 5, 2, 1], [4, 4, 5, 2, 1], [5, 6, 8, 5, 3]]
+    >>> right = [[3, 2, 4, 0], [3, 2, 4, 2], [0, 7, 3, 3], [3, 3, 0, 2], [1, 3, 2, 2]]
+    >>> manhattan_tourist(down, right, 4, 4)
+    34
+    """
+    assert len(down) == n
+    assert len(down[0]) == m + 1
+    assert len(right) == n + 1
+    assert len(right[0]) == m
+
+    minval = -100000000000
+    dp = collections.defaultdict(lambda: minval)
+
+    for r in range(0, n + 1):
+        for c in range(0, m + 1):
+            if r == c == 0:
+                dp[0, 0] = 0
+            else:
+                dp[r, c] = max(
+                    dp[r - 1, c] + down[r - 1][c], dp[r, c - 1] + right[r][c - 1]
+                )
+    return dp[n, m]
 
 
+def lcs_backtrack(v: str, w: str) -> StrGrid:
+    s = collections.defaultdict(int)
+    backtrack = [[""] * (len(w) + 1) for _ in range(len(v) + 1)]
+    for i in range(1, len(v) + 1):
+        for j in range(1, len(w) + 1):
+            match = int(v[i - 1] == w[j - 1])
+            s[i, j] = max(s[i - 1, j], s[i, j - 1], s[i - 1, j - 1] + match)
+            if s[i, j] == s[i - 1, j]:
+                backtrack[i][j] = "↓"
+            elif s[i, j] == s[i, j - 1]:
+                backtrack[i][j] = "→"
+            else:
+                backtrack[i][j] = "↘"
+    return backtrack
 
+
+def output_lcs(backtrack: StrGrid, v: str, i: int, j: int) -> str:
+    if i == 0 or j == 0:
+        return ""
+    if backtrack[i][j] == "↓":
+        return output_lcs(backtrack, v, i - 1, j)
+    elif backtrack[i][j] == "→":
+        return output_lcs(backtrack, v, i, j - 1)
+    else:
+        return output_lcs(backtrack, v, i - 1, j - 1) + v[i - 1]
+
+
+def lcs(v: str, w: str) -> str:
+    """
+    >>> lcs("AACCTTGG", "ACACTGTGA")
+    'AACTTG'
+    """
+    backtrack = lcs_backtrack(v, w)
+    res = output_lcs(backtrack, v, len(v), len(w))
+    return res
+
+
+def lcs_backtrack_all(v: str, w: str) -> StrGrid:
+    s = collections.defaultdict(int)
+    backtrack = [[set() for _ in (len(w) + 1)] for _ in range(len(v) + 1)]
+    for i in range(1, len(v) + 1):
+        for j in range(1, len(w) + 1):
+            match = int(v[i - 1] == w[j - 1])
+            candidates = (s[i - 1, j], s[i, j - 1], s[i - 1, j - 1] + match)
+            for candidate, dir_ in zip(candidates, "↓→↘"):
+                if s[i, j] < candidate:
+                    s[i, j] = candidate
+                    backtrack[i][j] = {dir_}
+                elif s[i, j] == candidate:
+                    backtrack[i][j].add(dir_)
+    return backtrack
+
+
+# def lcs_all(v: str, w: str) -> Set[str]:
+#     """
+#     >>> lcs_all("AACCTTGG", "ACACTGTGA")
+#     'AACTTG'
+#     """
+#     backtrack = lcs_backtrack_all(v, w)
+#     res = output_lcs_all(backtrack, v, len(v), len(w))
+#     return res
+
+
+def longest_path_in_dag(
+    g: AdjList, w: EdgeWeight, start: Hashable, goal: Hashable
+) -> Tuple[int, Path]:
+    """
+    >>> g = {0: [1, 2], 1: [4], 2: [3], 3: [4]}
+    >>> w = {(0, 1): 7, (0, 2): 4, (2, 3): 2, (1, 4): 1, (3, 4): 3}
+    >>> longest_path_in_dag(g, w, 0, 4)
+    (9, [0, 2, 3, 4])
+    """
+    g_pred = collections.defaultdict(list)
+    for x, preds in g.items():
+        for pred in preds:
+            g_pred[pred].append(x)
+
+    vs = toposort(g)
+    dp = collections.defaultdict(lambda: -1000000)
+    pred = dict()
+    dp[start] = 0
+    for v in vs:
+        if v == start:
+            continue
+        for v_prev in g_pred.get(v, []):
+            if dp[v] < (newmax := dp[v_prev] + w[v_prev, v]):
+                dp[v] = newmax
+                pred[v] = v_prev
+
+    x = goal
+    path = collections.deque([x])
+    while x != start:
+        x = pred[x]
+        path.appendleft(x)
+
+    return dp[goal], list(path)
 
 
 if __name__ == "__main__":
-    money = int(input())
-    coins = [int(s) for s in input().strip().split(",")]
-    res = dp_change_more(money, coins)
-    print(res)
+
+    # n, m = map(int, input().split())
+    # down = [[int(s) for s in input().split()] for s in range(n)]
+    # _ = input()
+    # right = [[int(s) for s in input().split()] for s in range(n + 1)]
+
+    # res = manhattan_tourist(down, right, n, m)
+    # print(res)
+
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input")
+    args = parser.parse_args()
+
+    with open(args.input, "r") as f:
+        start = int(f.readline())
+        goal = int(f.readline())
+        pairs = [line.strip().split(":") for line in f.readlines()]
+
+    g = collections.defaultdict(list)
+    edge_weight = dict()
+    for edge, weight in pairs:
+        w = int(weight)
+        a, b = map(int, edge.split("->"))
+        edge_weight[a, b] = w
+        g[a].append(b)
+
+    x, path = longest_path_in_dag(g, edge_weight, start, goal)
+    print(x)
+    print("->".join(map(str, path)))
