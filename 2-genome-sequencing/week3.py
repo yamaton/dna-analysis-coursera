@@ -14,7 +14,7 @@ Peptide = str
 
 rc = reverse_complement
 
-rna_table = {
+RNA_TABLE = {
     "UUU": "F",
     "UUC": "F",
     "UUA": "L",
@@ -81,14 +81,14 @@ rna_table = {
     "UGA": "*",
 }
 
-dna_table = {k.translate(str.maketrans({"U": "T"})): v for k, v in rna_table.items()}
+DNA_TABLE = {k.translate(str.maketrans({"U": "T"})): v for k, v in RNA_TABLE.items()}
 
-dna_rev_table = collections.defaultdict(set)
-for k, v in dna_table.items():
-    dna_rev_table[v].add(k)
+DNA_REV_TABLE = collections.defaultdict(set)
+for k, v in DNA_TABLE.items():
+    DNA_REV_TABLE[v].add(k)
 
 
-three_to_one = {
+AA_AS_LETTER = {
     "Ala": "A",
     "Asx": "B",
     "Cys": "C",
@@ -156,7 +156,7 @@ def translate(rna: str, check_stop_codon=False) -> str:
     """
     assert len(rna) % 3 == 0
     iterator = ("".join(chunk) for chunk in chunked(rna, 3))
-    s = "".join(rna_table[codon] for codon in iterator)
+    s = "".join(RNA_TABLE[codon] for codon in iterator)
 
     if check_stop_codon:
         assert s[-1] == "*"  # stop codon at last
@@ -167,7 +167,7 @@ def translate(rna: str, check_stop_codon=False) -> str:
 
 def count_distict_dna(protein: str) -> int:
     count_inv_map = collections.defaultdict(int)
-    for _, amino in rna_table.items():
+    for _, amino in RNA_TABLE.items():
         count_inv_map[amino] += 1
 
     return functools.reduce(operator.mul, (count_inv_map[amino] for amino in protein))
@@ -180,7 +180,7 @@ def _dna_candidates(protein: str) -> Generator:
     """
     d = []
     for amino in protein:
-        nuc = dna_rev_table[amino]
+        nuc = DNA_REV_TABLE[amino]
         d.append(nuc)
     g = map(lambda xs: "".join(xs), it.product(*d))
     return g
@@ -222,7 +222,7 @@ def format_3to1(protein: str) -> str:
     >>> format_3to1("Val-Lys-Leu-Phe-Pro-Trp-Phe-Asn-Gln-Tyr")
     'VKLFPWFNQY'
     """
-    aminos = [three_to_one[s] for s in protein.split("-")]
+    aminos = [AA_AS_LETTER[s] for s in protein.split("-")]
     return "".join(aminos)
 
 
@@ -238,7 +238,7 @@ def count_subpeptides(n: int) -> int:
     return n * (n - 1)
 
 
-def linear_spectrum(peptide: Peptide) -> MassSpectrum:
+def linear_spectrum(peptide: Peptide, aa_set=AA_MASS) -> MassSpectrum:
     """
     >>> linear_spectrum("NQEL")
     [0, 113, 114, 128, 129, 242, 242, 257, 370, 371, 484]
@@ -246,7 +246,7 @@ def linear_spectrum(peptide: Peptide) -> MassSpectrum:
     n = len(peptide)
     prefix_mass = [0] * (n + 1)
     for i, aa in enumerate(peptide, 1):
-        prefix_mass[i] = prefix_mass[i - 1] + AA_MASS[aa]
+        prefix_mass[i] = prefix_mass[i - 1] + aa_set[aa]
 
     res = [0]
     for i in range(n):
@@ -257,7 +257,7 @@ def linear_spectrum(peptide: Peptide) -> MassSpectrum:
     return sorted(res)
 
 
-def cyclic_spectrum(peptide: Peptide) -> MassSpectrum:
+def cyclic_spectrum(peptide: Peptide, aa_set=AA_MASS) -> MassSpectrum:
     """
     >>> cyclic_spectrum("LEQN")
     [0, 113, 114, 128, 129, 227, 242, 242, 257, 355, 356, 370, 371, 484]
@@ -265,7 +265,7 @@ def cyclic_spectrum(peptide: Peptide) -> MassSpectrum:
     n = len(peptide)
     prefix_mass = [0] * (n + 1)
     for i, aa in enumerate(peptide, 1):
-        prefix_mass[i] = prefix_mass[i - 1] + AA_MASS[aa]
+        prefix_mass[i] = prefix_mass[i - 1] + aa_set[aa]
 
     peptide_mass = prefix_mass[n]
     res = [0]
@@ -351,7 +351,7 @@ def cyclopeptide_sequencing(spectrum: MassSpectrum) -> Set[Peptide]:
     return final_peptides
 
 
-def _expand(candidates: Set[Peptide], aas: Iterable[str]) -> Set[Peptide]:
+def _expand(candidates: Iterable[Peptide], aas: Iterable[str]) -> Set[Peptide]:
     aas = AA_MASS_REDUCED.keys() if aas is None else aas
     res = {candidate + nuc for candidate in candidates for nuc in aas}
     return res
@@ -369,8 +369,8 @@ def _mass(peptide: Peptide) -> int:
     return sum(AA_MASS[aa] for aa in peptide)
 
 
-def format_peptide_as_masses(peptide: Peptide) -> str:
-    masses = [AA_MASS_REDUCED[nuc] for nuc in peptide]
+def peptide_as_hyphenated_mass(peptide: Peptide, aa_set=AA_MASS_REDUCED) -> str:
+    masses = [aa_set[nuc] for nuc in peptide]
     return "-".join(str(m) for m in masses)
 
 
@@ -384,5 +384,5 @@ if __name__ == "__main__":
 
     spectrum = [int(s) for s in input().strip().split()]
     peptides = cyclopeptide_sequencing(spectrum)
-    res = [format_peptide_as_masses(p) for p in peptides]
+    res = [peptide_as_hyphenated_mass(p) for p in peptides]
     print(*res)
