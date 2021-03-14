@@ -55,6 +55,9 @@ PAM250 = [
 ]
 PAM250_DICT = {(x, y): PAM250[i][j] for i, x in enumerate(AAS) for j, y in enumerate(AAS)}
 
+SIMPLE_DICT = {(x, y): (1 if x == y else -1) for x in AAS for y in AAS}
+SIMPLE_DICT2 = {(x, y): (1 if x == y else -2) for x in AAS for y in AAS}
+
 
 def toposort(g: AdjList) -> List[Hashable]:
     """
