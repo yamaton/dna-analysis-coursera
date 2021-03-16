@@ -1,7 +1,7 @@
 import collections
 import itertools as it
 
-from typing import Callable, Coroutine, DefaultDict, Dict, Tuple
+from typing import DefaultDict, Dict, Tuple
 from utils import AAS, BLOSUM62_DICT, PAM250_DICT, SIMPLE_DICT, SIMPLE_DICT2
 
 Coordinate = Tuple[int, int]

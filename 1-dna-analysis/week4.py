@@ -1,6 +1,5 @@
 from typing import Iterable, Set, List, Tuple
 import itertools as it
-import sys
 import functools
 import operator
 import random
@@ -90,7 +89,9 @@ def randomized_motif_search(dna: Iterable[str], k: int, t: int) -> Motifs:
     """
     attempts = 1000
     with multiprocessing.Pool(PROCESSES) as pool:
-        parallel_result = pool.map(lambda x: _randomized_motif_search_unit(dna, k, t), range(attempts))
+        parallel_result = pool.map(
+            lambda x: _randomized_motif_search_unit(dna, k, t), range(attempts)
+        )
 
     score, motifs = min(parallel_result)
     return score, motifs
@@ -117,7 +118,6 @@ def _gibbs_sampler_core(
     return score(best_motifs), best_motifs
 
 
-
 def gibbs_sampler(
     dna: Iterable[str], k: int, t: int, repeat: int
 ) -> Tuple[int, Motifs]:
@@ -128,7 +128,9 @@ def gibbs_sampler(
     """
     attempts = 20
     with pathos.pools.ProcessPool(PROCESSES) as pool:
-        parallel_result = pool.map(lambda x: _gibbs_sampler_core(dna, k, t, repeat), range(attempts))
+        parallel_result = pool.map(
+            lambda x: _gibbs_sampler_core(dna, k, t, repeat), range(attempts)
+        )
     score, motifs = min(parallel_result)
     return score, motifs
 
