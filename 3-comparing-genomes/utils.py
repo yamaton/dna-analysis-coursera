@@ -1,7 +1,8 @@
 import collections
 import functools
 import itertools as it
-from typing import Dict, Hashable, List, Set, DefaultDict
+from functools import partial
+from typing import Dict, Generator, Hashable, Iterable, List, Set, Tuple
 
 AdjList = Dict[Hashable, List[Hashable]]
 
@@ -82,3 +83,21 @@ def toposort(g: AdjList) -> List[Hashable]:
         _helper(v, visited, queue)
 
     return list(queue)
+
+
+def chunked(iterable: Iterable, n: int) -> Generator:
+    """
+    [NOTE] Borrowed from more-itertools
+    >>> list(chunked([1, 2, 3, 4, 5, 6, 7], 3))
+    [(1, 2, 3), (4, 5, 6), (7,)]
+    """
+    iterator = iter(partial(take, n, iter(iterable)), ())
+    return iterator
+
+
+def take(n: int, iterable: Iterable) -> Tuple:
+    """
+    >>> take(3, [1, 2, 3, 4])
+    (1, 2, 3)
+    """
+    return tuple(it.islice(iterable, n))
