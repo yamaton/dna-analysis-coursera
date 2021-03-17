@@ -4,8 +4,8 @@ import collections
 from utils import AdjList, chunked
 
 Ring = List  # a compromise!
-SynthenyBlock = str
-Chromosome = Ring[SynthenyBlock]
+SyntenyBlock = str
+Chromosome = Ring[SyntenyBlock]
 Genome = Set[Chromosome]
 
 Node = int
@@ -47,11 +47,11 @@ def cycle_to_chromosome(cycle: Cycle) -> Chromosome:
             xs.append(y // 2)
         else:
             xs.append(-x // 2)
-    res = [to_syntheny_block(x) for x in xs]
+    res = [to_synteny_block(x) for x in xs]
     return res
 
 
-def to_syntheny_block(x: int) -> SynthenyBlock:
+def to_synteny_block(x: int) -> SyntenyBlock:
     return f"+{x}" if x > 0 else str(x)
 
 
@@ -66,7 +66,7 @@ def format_chromosome(chromosome: Chromosome) -> str:
     xs = []
     for x in chromosome:
         if isinstance(x, int):
-            x = to_syntheny_block(x)
+            x = to_synteny_block(x)
         xs.append(x)
     s = " ".join(xs)
     return f"({s})"
@@ -141,16 +141,16 @@ def edges_to_genome(edges: Iterable[Edge]) -> Genome:
             chromosome = []
             x = min(g) + 1
         else:
-            syntheny = (x + 1) // 2
+            synteny = (x + 1) // 2
             if x % 2 == 1:
-                syntheny = -syntheny
-            chromosome.append(syntheny)
+                synteny = -synteny
+            chromosome.append(synteny)
             x = g.pop(x)
             g.pop(x)
             x = (x - 1) if x % 2 == 0 else (x + 1)
     res.append(chromosome)
 
-    return [[to_syntheny_block(n) for n in ch] for ch in res]
+    return [[to_synteny_block(n) for n in ch] for ch in res]
 
 
 def parse_edges(s: str) -> List[Edge]:
