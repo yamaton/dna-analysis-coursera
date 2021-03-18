@@ -1,4 +1,4 @@
-from typing import Hashable, Iterable, List, Set, Tuple
+from typing import DefaultDict, Generator, Hashable, Iterable, List, Set, Tuple
 import itertools as it
 import collections
 from utils import AdjList, chunked
@@ -11,6 +11,8 @@ Genome = Set[Chromosome]
 Node = int
 Cycle = Ring[Node]
 Edge = Tuple[Node, Node]
+
+Coordinate = Tuple[int, int]
 
 
 def chromosome_to_cycle(chromosome: Chromosome) -> Cycle:
@@ -242,18 +244,88 @@ def _trivial_cycles(g: AdjList) -> Set[Tuple[Hashable, Hashable]]:
     return cycles
 
 
-def two_break_sorting(p: Genome, q: Genome) -> List[Genome]:
+# def two_break_sorting(p: Genome, q: Genome) -> List[Genome]:
+#     """
+#     >>> p = parse_genome("(+1 -2 -3 +4)")
+#     >>> q = parse_genome("(+1 +2 -4 -3)")
+#     >>> [format_genome(genome) for genome in two_break_sorting(p, q)]
+#     ['(+1 -2 -3 +4)', '(+1 -2 -3)(+4)', '(+1 -2 -4 -3)', '(-3 +1 +2 -4)']
+#     """
+#     ...
+
+
+RC_TABLE = dict(zip("ATCG", "TAGC"))
+
+
+def rc(s: Iterable[str]) -> Iterable[str]:
+    s_rc = list(reversed([RC_TABLE[c] for c in s]))
+    if isinstance(s, str):
+        s_rc = "".join(s_rc)
+    elif isinstance(s, tuple):
+        s_rc = tuple(s_rc)
+    return s_rc
+
+
+def windowed(iterable: Iterable, n: int, step=1) -> Generator:
+    """Returns sliding window as generator
+
+    [NOTE] Borrowed from more-itertools
+
+    >>> list(windowed([1,2,3,4], 3))
+    [(1, 2, 3), (2, 3, 4)]
     """
-    >>> p = parse_genome("(+1 -2 -3 +4)")
-    >>> q = parse_genome("(+1 +2 -4 -3)")
-    >>> [format_genome(genome) for genome in two_break_sorting(p, q)]
-    ['(+1 -2 -3 +4)', '(+1 -2 -3)(+4)', '(+1 -2 -4 -3)', '(-3 +1 +2 -4)']
+    window = collections.deque(maxlen=n)
+    i = n
+    for _ in map(window.append, iterable):
+        i -= 1
+        if i == 0:
+            i = step
+            yield tuple(window)
+
+
+def shared_kmers(k: int, u: str, w: str) -> Set[Coordinate]:
     """
-    ...
+    >>> computed = shared_kmers(3, "AAACTCATC", "TTTCAAATC")
+    >>> expected = {(6, 6), (0, 4), (4, 2), (0, 0)}
+    >>> computed == expected
+    True
+
+    >>> shared_kmers(3, "AGAT", "AATC")
+    {(1, 1)}
+    """
+    res = set(_gen_matching_coord(k, u, w))
+    return res
+
+def _gen_matching_coord(k: int, u: str, w: str) -> Generator:
+    kmers = collections.defaultdict(set)
+    for idx, window in enumerate(map(lambda s: "".join(s), windowed(u, k))):
+        kmers[window].add(idx)
+        kmers[rc(window)].add(idx)
+
+    for j, seg in enumerate(map(lambda s: "".join(s), windowed(w, k))):
+        if seg in kmers:
+            indices = kmers[seg]
+            for i in indices:
+                yield (i, j)
 
 
 if __name__ == "__main__":
-    genome = parse_genome(input())
-    i1, i2, i3, i4 = map(int, input().split(","))
-    genome = two_break_on_genome(genome, i1, i2, i3, i4)
-    print(format_genome(genome))
+    k = 30
+    u = open("./E_coli.txt").read().strip()
+    w = open("./Salmonella_enterica.txt").read().strip()
+    res = shared_kmers(k, u, w)
+    print(len(res))
+
+    # i, j = (50951, 16026)
+    # print(u[i : i + k])
+    # print(w[j : j + k])
+
+
+    # i, j = (120069, 237)
+    # print(u[i : i + k])
+    # print(w[j : j + k])
+
+    # i, j = (120070, 238)
+    # print(u[i : i + k])
+    # print(w[j : j + k])
+
