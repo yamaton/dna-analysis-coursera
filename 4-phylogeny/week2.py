@@ -54,11 +54,11 @@ def upgma(dist_mat: Matrix) -> EdgeWeight:
     return edgeweight
 
 
-def _find_closest_pair(dist_mat: Matrix) -> Tuple[int, int]:
-    size = len(dist_mat)
+def _find_closest_pair(m: Matrix) -> Tuple[int, int]:
+    size = len(m)
     return min(
         ((i, j) for i in range(size) for j in range(i + 1, size)),
-        key=lambda pair: dist_mat[pair],
+        key=lambda pair: m[pair],
     )
 
 
@@ -104,7 +104,7 @@ def to_edges(edgeweight: EdgeWeight) -> List[str]:
     return [(a, b, f"{a}->{b}:{w:0.3f}") for (a, b), w in edgeweight.items()]
 
 
-def neighbor_joining(dist_mat: Matrix) -> EdgeWeight:
+def neighbor_joining(d: Matrix) -> EdgeWeight:
     """
     >>> mat = [[0, 23, 27, 20], [23, 0, 30, 28], [27, 30, 0, 30], [20, 28, 30, 0]]
     >>> expected = {(0, 4): 8.000, (1, 5): 13.500, (2, 5): 16.500, (3, 4): 12.000, (4, 5): 2.000, (4, 0): 8.000, (4, 3): 12.000, (5, 1): 13.500, (5, 2): 16.500, (5, 4): 2.000}
@@ -112,10 +112,46 @@ def neighbor_joining(dist_mat: Matrix) -> EdgeWeight:
     >>> all(np.isclose(computed[k], expected[k], atol=0.001) for k in expected) and computed.keys() == expected.keys()
     True
     """
-    ...
+    d = np.array(d, dtype=float)
+    nrows, ncols = d.shape
+    assert nrows == ncols
+    nodes = list(range(nrows))  # index-node relation
+    next_node = nrows
+    edgeweight = dict()
+
+    while len(nodes) > 2:
+        i, j = _find_closest_pair(q_matrix(d))
+        nrows, ncols = d.shape
+        delta = (d[i, :].sum() - d[j, :].sum()) / (nrows - 2)
+        u_to_f = (d[i, j] + delta) / 2
+        u_to_g = d[i, j] - u_to_f
+        f, g, u = nodes[i], nodes[j], next_node
+
+        edgeweight[f, u] = edgeweight[u, f] = u_to_f
+        edgeweight[g, u] = edgeweight[u, g] = u_to_g
+
+        indices_rest = [k for k in range(nrows) if k not in (i, j)]
+        dist_u_to_rest = (d[indices_rest, i] + d[indices_rest, j] - d[i, j]) / 2
+
+        d_next = np.zeros((nrows - 1, ncols - 1), dtype=float)
+        d_next[:-1, :-1] = d[np.ix_(indices_rest, indices_rest)]
+        d_next[-1, :-1] = dist_u_to_rest
+        d_next[:-1, -1] = dist_u_to_rest
+        d = d_next
+
+        nodes = [nodes[k] for k in indices_rest]
+        nodes.append(u)
+
+        next_node += 1
+
+    # Take care of the 2x2 matrix at last
+    f, g = nodes[0], nodes[1]
+    edgeweight[f, g] = edgeweight[g, f] = d[0, 1]
+
+    return edgeweight
 
 
-def q_matrix(mat: Matrix, set_diagonal: int=0) -> Matrix:
+def q_matrix(mat: Matrix, set_diagonal: int = 0) -> Matrix:
     """
     >>> mat = [[0, 5, 9, 9, 8], [5, 0, 10, 10, 9], [9, 10, 0, 8, 7], [9, 10, 8, 0, 3], [8, 9, 7, 3, 0]]
     >>> mat = np.asarray(mat)
@@ -136,7 +172,7 @@ def q_matrix(mat: Matrix, set_diagonal: int=0) -> Matrix:
 if __name__ == "__main__":
     n = int(input())
     mat = [[int(c) for c in input().split()] for line in range(n)]
-    edgeweight = upgma(mat)
+    edgeweight = neighbor_joining(mat)
     edges_as_str = sorted(to_edges(edgeweight))
     for _, _, s in edges_as_str:
         print(s)
